@@ -1,0 +1,108 @@
+Subject: UPDATE - API Endpoint Implementation Instructions - RepGator Project
+
+Based on requirements from the Mobile App Agent, please implement the following HTTP endpoints. You will translate these into Kafka request/reply interactions using the established topic naming conventions (`req.api-gateway.*`, `res.*.api-gateway.*`). Ensure JWT validation is performed for all routes marked "Auth Required: Yes".
+
+**Authentication Endpoints (Target: User Service)**
+1.  **Login:**
+    *   Method: `POST`
+    *   Path: `/auth/login`
+    *   Auth Required: No
+    *   Request Body: `{ email: string, password: string }`
+    *   Kafka Request Topic: `req.api-gateway.user-service.login`
+    *   Expected Kafka Reply (from User Service): `{ success: boolean, token?: string, user?: object, error?: string }`
+    *   HTTP Response: `200 OK { token: string, user: object }` or `401 Unauthorized { error: string }`
+2.  **Register:**
+    *   Method: `POST`
+    *   Path: `/auth/register`
+    *   Auth Required: No
+    *   Request Body: `{ email: string, password: string, name?: string, address: string, ... }` (Forward relevant fields)
+    *   Kafka Request Topic: `req.api-gateway.user-service.register`
+    *   Expected Kafka Reply (from User Service): `{ success: boolean, token?: string, user?: object, error?: string }`
+    *   HTTP Response: `201 Created { token: string, user: object }` or `400 Bad Request { error: string }`
+
+**Representative Endpoints (Target: Representative Service)**
+3.  **Get Representatives by District:**
+    *   Method: `GET`
+    *   Path: `/representatives`
+    *   Query Parameter: `districtId` (string, required) - e.g., `/representatives?districtId=OK03`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.representative-service.get-by-district` (Payload should include `districtId`)
+    *   Expected Kafka Reply: `{ success: boolean, representatives?: Array<object>, error?: string }`
+    *   HTTP Response: `200 OK Array<Representative>` or `404 Not Found` / `500 Internal Server Error`
+4.  **Get Representative Details:**
+    *   Method: `GET`
+    *   Path: `/representatives/{repId}`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.representative-service.get-by-id` (Payload should include `repId`)
+    *   Expected Kafka Reply: `{ success: boolean, representative?: object, error?: string }`
+    *   HTTP Response: `200 OK RepresentativeDetail` or `404 Not Found`
+
+**Messages/Conversation Endpoints (Target: Message Service)**
+5.  **Get Conversation List:**
+    *   Method: `GET`
+    *   Path: `/conversations`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.message-service.get-user-conversations` (Payload should include authenticated user ID from token)
+    *   Expected Kafka Reply: `{ success: boolean, conversations?: Array<object>, error?: string }`
+    *   HTTP Response: `200 OK Array<ConversationPreview>`
+6.  **Get Messages for Conversation:**
+    *   Method: `GET`
+    *   Path: `/conversations/{conversationId}/messages`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.message-service.get-conversation-messages` (Payload includes `conversationId` and user ID)
+    *   Expected Kafka Reply: `{ success: boolean, messages?: Array<object>, error?: string }`
+    *   HTTP Response: `200 OK Array<Message>`
+7.  **Send Direct Message:**
+    *   Method: `POST`
+    *   Path: `/messages`
+    *   Auth Required: Yes
+    *   Request Body: `{ recipientId: string, text: string }`
+    *   Kafka Request Topic: `req.api-gateway.message-service.post-direct-message` (Payload includes sender ID, recipientId, text)
+    *   Expected Kafka Reply: `{ success: boolean, message?: object, error?: string }`
+    *   HTTP Response: `201 Created Message` or `400 Bad Request`
+
+**Dashboard Endpoint (Target: User Service)**
+8.  **Get Dashboard Summary:**
+    *   Method: `GET`
+    *   Path: `/dashboard/summary`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.user-service.get-dashboard-summary` (Payload includes user ID)
+    *   Expected Kafka Reply: `{ success: boolean, summary?: object, error?: string }`
+    *   HTTP Response: `200 OK DashboardSummary`
+
+**User Profile Endpoints (Target: User Service)**
+9.  **Get User Profile:**
+    *   Method: `GET`
+    *   Path: `/user/profile`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.user-service.get-profile` (Payload includes user ID)
+    *   Expected Kafka Reply: `{ success: boolean, profile?: object, error?: string }`
+    *   HTTP Response: `200 OK UserProfile`
+10. **Update User Profile:**
+    *   Method: `PUT`
+    *   Path: `/user/profile`
+    *   Auth Required: Yes
+    *   Request Body: Partial UserProfile object (e.g., `{ name: string, address: object }`)
+    *   Kafka Request Topic: `req.api-gateway.user-service.update-profile` (Payload includes user ID and update data)
+    *   Expected Kafka Reply: `{ success: boolean, profile?: object, error?: string }`
+    *   HTTP Response: `200 OK UserProfile` or `400 Bad Request`
+
+**Discussion Endpoints (Target: Message Service)**
+11. **Get District Discussion Posts:**
+    *   Method: `GET`
+    *   Path: `/discussions`
+    *   Query Parameter: `districtId` (string, required) - e.g., `/discussions?districtId=OK03`
+    *   Auth Required: Yes
+    *   Kafka Request Topic: `req.api-gateway.message-service.get-district-messages` (Payload includes `districtId` and user ID)
+    *   Expected Kafka Reply: `{ success: boolean, messages?: Array<object>, error?: string }`
+    *   HTTP Response: `200 OK Array<DiscussionPost>` (Adapt message structure if needed)
+12. **Create District Discussion Post:**
+    *   Method: `POST`
+    *   Path: `/discussions`
+    *   Auth Required: Yes
+    *   Request Body: `{ districtId: string, text: string }`
+    *   Kafka Request Topic: `req.api-gateway.message-service.post-district-message` (Payload includes sender ID, districtId, text)
+    *   Expected Kafka Reply: `{ success: boolean, message?: object, error?: string }`
+    *   HTTP Response: `201 Created DiscussionPost`
+
+Prioritize implementing the Authentication and User Profile endpoints first, followed by Representatives and basic Messaging. Ensure robust error handling and timeout management for all Kafka interactions. Configure the base URL and other parameters as needed.

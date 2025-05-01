@@ -1,0 +1,73 @@
+RepGator User Login Flow
+========================
+
+Goal: An existing user logs in through the Mobile App.
+
+Actors/Services Involved:
+*   Mobile App
+*   API Gateway
+*   User Service
+
+Flow Steps:
+-----------
+
+1.  Mobile App -> API Gateway (HTTP Request):
+    *   User enters email and password on Mobile App login screen.
+    *   Mobile App sends HTTP POST request to API Gateway: POST /auth/login.
+    *   Request Body: { "email": "user@example.com", "password": "user_password" }.
+
+2.  API Gateway (HTTP -> Kafka Request):
+    *   Receives POST /auth/login request.
+    *   Identifies target: user-service, action: login.
+    *   Generates correlationId (e.g., corrId_789).
+    *   Determines request topic: req.api-gateway.user-service.login.
+    *   Determines reply topic: res.user-service.api-gateway.login.
+    *   Constructs Kafka Message:
+        *   Topic: req.api-gateway.user-service.login
+        *   Headers: correlationId=corrId_789, replyTopic=res.user-service.api-gateway.login, sourceService=api-gateway
+        *   Payload: { "email": "user@example.com", "password": "user_password" }
+    *   Publishes message to Kafka.
+    *   Listens on res.user-service.api-gateway.login for corrId_789 (with timeout).
+
+3.  User Service (Consume Login Request):
+    *   Listener consumes message from req.api-gateway.user-service.login.
+    *   Extracts headers (corrId_789, replyTopic) and payload.
+
+4.  User Service (Process Login):
+    *   Queries database (users table) for user matching email.
+    *   If User Found:
+        *   Compares provided password with stored password_hash (using bcrypt/configured hasher).
+        *   If Password Matches:
+            *   Generates JWT.
+            *   Retrieves user details (id, email, name, districtId).
+            *   Constructs success reply payload: { success: true, token: "new.jwt.token", user: { ... } }.
+            *   Proceeds to Step 5.
+        *   If Password Mismatch:
+            *   Constructs error reply payload: { success: false, error: "Invalid credentials" }.
+            *   Proceeds to Step 5.
+    *   If User Not Found:
+        *   Constructs error reply payload: { success: false, error: "Invalid credentials" }.
+        *   Proceeds to Step 5.
+
+5.  User Service -> API Gateway (Produce Login Reply via Kafka):
+    *   Constructs Kafka Reply Message using payload from Step 4.
+    *   Topic: res.user-service.api-gateway.login (from request header)
+    *   Headers: correlationId=corrId_789 (original request ID), sourceService=user-service
+    *   Payload: Success or Error payload from Step 4.
+    *   Publishes reply message to Kafka.
+
+6.  API Gateway (Kafka Reply -> HTTP Response):
+    *   Receives reply on res.user-service.api-gateway.login, matches corrId_789.
+    *   If Success Payload: Extracts token, user details. Constructs HTTP 200 OK response.
+    *   If Error Payload: Extracts error message. Constructs HTTP 401 Unauthorized response.
+    *   Sends HTTP response back to Mobile App.
+
+7.  Mobile App (Handle Response):
+    *   Receives HTTP response.
+    *   If 200 OK: Securely stores JWT, updates state (logged in), navigates to dashboard.
+    *   If 401 Unauthorized: Displays "Invalid credentials" error message.
+
+Kafka Topics Used in this Flow:
+------------------------------
+*   req.api-gateway.user-service.login (API GW -> User Svc)
+*   res.user-service.api-gateway.login (User Svc -> API GW) 

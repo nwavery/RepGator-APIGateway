@@ -1,0 +1,32 @@
+Subject: Add News Endpoint and Kafka Request/Reply Logic to API Gateway
+
+Request:
+
+Please enhance the RepGator-APIGateway to handle requests for political news, relaying them to the District Service via Kafka and returning the results.
+
+Requirements:
+
+1.  **New HTTP Endpoint:** Create a new HTTP GET endpoint: `/news/politics`.
+2.  **Kafka Request on HTTP:**
+    *   When the GET `/news/politics` endpoint is called:
+    *   Generate a unique `correlationId`.
+    *   Define the Kafka request topic: `req.api-gateway.district-service.get-politics-news`.
+    *   Define the Kafka reply topic: `res.district-service.api-gateway.get-politics-news`.
+    *   Construct a Kafka request message (payload can be empty or minimal if no specific input is needed from the client).
+    *   Include headers: `correlationId`, `replyTopic`, `sourceService=api-gateway`.
+    *   Publish the message to the `req.api-gateway.district-service.get-politics-news` topic.
+3.  **Kafka Reply Listener:**
+    *   Listen on the `res.district-service.api-gateway.get-politics-news` topic.
+    *   Implement logic to correlate incoming reply messages using the `correlationId` with the original pending HTTP request.
+    *   Include a reasonable timeout for waiting for the reply.
+4.  **HTTP Response:**
+    *   Upon receiving the corresponding Kafka reply message:
+        *   Extract the payload containing the news articles (or an error payload) sent by the District Service.
+        *   If successful, format an HTTP 200 OK response with the news articles JSON as the body.
+        *   If the District Service replied with an error, or if the timeout occurs, format an appropriate HTTP error response (e.g., 500 Internal Server Error, 504 Gateway Timeout).
+    *   Send the HTTP response back to the original client (Mobile App).
+5.  **Topic Bean:** Ensure a `NewTopic` bean is configured for `res.district-service.api-gateway.get-politics-news` if topic auto-creation is used (the request topic bean should be managed by the District Service).
+
+Goal:
+
+The objective is for the API Gateway to expose a `/news/politics` endpoint to the frontend, manage the Kafka request/reply interaction with the District Service to fetch the news, and return the results (or errors) via HTTP. 

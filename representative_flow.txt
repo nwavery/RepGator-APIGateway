@@ -1,0 +1,80 @@
+RepGator Find Your Representative Flow
+====================================
+
+Goal: A logged-in user views the list of their US Representative and Senators.
+
+Actors/Services Involved:
+*   Mobile App
+*   API Gateway
+*   User Service (for profile/district)
+*   Representative Service (for rep/senator data)
+
+Pre-requisite: User is logged in, Mobile App has a valid JWT.
+
+Flow Steps:
+-----------
+
+1.  Mobile App -> API Gateway (Get User Profile - HTTP Request):
+    *   User navigates to Reps screen or Dashboard.
+    *   Mobile App needs user's districtId.
+    *   Mobile App sends HTTP GET request: GET /user/profile.
+    *   Includes Authorization: Bearer <JWT> header.
+
+2.  API Gateway -> User Service (Get Profile - Kafka Request/Reply):
+    *   API GW receives GET /user/profile, validates JWT, gets userId.
+    *   API GW -> Kafka: req.api-gateway.user-service.get-profile (key=userId).
+    *   User Service consumes, queries DB for user (incl. district_id).
+    *   User Service -> Kafka: res.user-service.api-gateway.get-profile (payload has user details).
+    *   API GW receives reply, sends HTTP 200 OK to Mobile App with profile.
+
+3.  Mobile App (Receive Profile, Extract District):
+    *   Receives HTTP 200 OK with profile.
+    *   Extracts districtId (e.g., "OK03") from profile data.
+
+4.  Mobile App -> API Gateway (Get Representatives - HTTP Request):
+    *   Uses obtained districtId.
+    *   Mobile App sends HTTP GET request: GET /representatives?districtId=OK03 (example).
+    *   Includes Authorization: Bearer <JWT> header.
+
+5.  API Gateway (HTTP -> Kafka Request):
+    *   Receives GET /representatives?districtId=... Validates JWT.
+    *   Identifies target: representative-service, action: get-by-district.
+    *   Extracts districtId from query param.
+    *   Generates correlationId (e.g., corrId_rep1).
+    *   Determines request topic: req.api-gateway.representative-service.get-by-district.
+    *   Determines reply topic: res.representative-service.api-gateway.get-by-district.
+    *   Constructs Kafka Message:
+        *   Topic: req.api-gateway.representative-service.get-by-district
+        *   Headers: correlationId=corrId_rep1, replyTopic=res.representative-service.api-gateway.get-by-district, sourceService=api-gateway
+        *   Payload: { "districtId": "OK03" }
+    *   Publishes message to Kafka.
+    *   Listens on res.representative-service.api-gateway.get-by-district for corrId_rep1 (with timeout).
+
+6.  Representative Service (Consume Request, Query DB, Produce Reply):
+    *   Listener consumes message from req.api-gateway.representative-service.get-by-district.
+    *   Extracts headers (corrId_rep1, replyTopic) and payload (districtId).
+    *   Parses state from districtId (e.g., "OK" from "OK03").
+    *   Queries Database:
+        *   Queries `representatives_detail` table by full districtId.
+        *   Queries `senators_detail` table by extracted state.
+    *   Combines results into a list of DTOs (adding title: "Representative" or "Senator").
+    *   Constructs Kafka Reply Message:
+        *   Topic: res.representative-service.api-gateway.get-by-district (from request header)
+        *   Headers: correlationId=corrId_rep1, sourceService=representative-service
+        *   Payload: { success: true, representatives: [ { ...RepDto... }, ... ] } OR { success: false, error: "..." }
+    *   Publishes reply message to Kafka.
+
+7.  API Gateway (Kafka Reply -> HTTP Response):
+    *   Receives reply on res.representative-service.api-gateway.get-by-district, matches corrId_rep1.
+    *   If Success Payload: Extracts list of representatives. Constructs HTTP 200 OK response with list.
+    *   If Error Payload: Constructs HTTP error response.
+    *   Sends HTTP response back to Mobile App.
+
+8.  Mobile App (Handle Response):
+    *   Receives HTTP response with list of representatives/senators.
+    *   Updates state, renders list on screen.
+
+Kafka Topics Used Primarily in this Flow (Post-Profile Fetch):
+-----------------------------------------------------------
+*   req.api-gateway.representative-service.get-by-district (API GW -> Rep Svc)
+*   res.representative-service.api-gateway.get-by-district (Rep Svc -> API GW) 

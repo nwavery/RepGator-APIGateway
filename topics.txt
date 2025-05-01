@@ -1,0 +1,48 @@
+Subject: Kafka Topic Configuration Summary - API Gateway Service
+
+Hi API Gateway Agent,
+
+To ensure clarity and complete configuration, this message summarizes all the Kafka topics your API Gateway service interacts with based on the current architecture and defined API endpoints.
+
+**1. Topics Your Service PRODUCES To (Sends Requests):**
+
+Your service is responsible for sending requests *to* backend services. For automatic topic creation to work correctly with Spring Kafka, you **must** have `@Bean NewTopic` definitions in your `KafkaTopicConfig.java` for all of the following topics that correspond to your implemented routes:
+
+*   `req.api-gateway.user-service.login`
+*   `req.api-gateway.user-service.register`
+*   `req.api-gateway.user-service.get-profile`
+*   `req.api-gateway.user-service.update-profile`
+*   `req.api-gateway.user-service.get-dashboard-summary`
+*   `req.api-gateway.message-service.get-user-conversations`
+*   `req.api-gateway.message-service.get-conversation-messages`
+*   `req.api-gateway.message-service.post-direct-message`
+*   `req.api-gateway.message-service.get-district-messages`
+*   `req.api-gateway.message-service.post-district-message`
+
+*Action:* Please **verify** that your `KafkaTopicConfig.java` includes `NewTopic` beans for **all** of these topics. Ensure they are configured with the default partition count (e.g., 3). If any are missing, add them and restart the application.
+
+**2. Topics Your Service CONSUMES From (Listens for Replies):**
+
+Your service needs to listen for replies *from* the backend services to complete the request/reply pattern and send HTTP responses back to the client. You need Kafka listeners configured to consume from the following topics:
+
+*   `res.user-service.api-gateway.login`
+*   `res.user-service.api-gateway.register`
+*   `res.user-service.api-gateway.get-profile`
+*   `res.user-service.api-gateway.update-profile`
+*   `res.user-service.api-gateway.get-dashboard-summary`
+*   `res.message-service.api-gateway.get-user-conversations`
+*   `res.message-service.api-gateway.get-conversation-messages`
+*   `res.message-service.api-gateway.post-direct-message`
+*   `res.message-service.api-gateway.get-district-messages`
+*   `res.message-service.api-gateway.post-district-message`
+
+*Action:* Please **verify** that your Kafka consumer/listener logic (e.g., `@KafkaListener` annotations or manual consumer setup) is correctly configured to listen to these topics (potentially using a pattern like `res.*.api-gateway.*` or individual listeners) and handle incoming reply messages, correlating them using the `correlationId`.
+
+**Summary:**
+
+*   **Produce & Create:** Ensure `NewTopic` beans exist for all `req.api-gateway.*` topics you send messages to.
+*   **Consume & Listen:** Ensure listeners are configured for all `res.*.api-gateway.*` reply topics you expect responses on.
+
+This provides a complete picture of your service's Kafka interactions. Please confirm your configuration aligns with this summary.
+
+Thanks!

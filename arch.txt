@@ -1,0 +1,51 @@
+Subject: Instructions for API Gateway Agent - RepGator Project
+
+You are responsible for building the API Gateway microservice for the RepGator platform using Java. This service acts as the single entry point for all external client (web/mobile) HTTP(S) requests, routing them to the appropriate backend microservices via Kafka, handling authentication, and managing the request/reply communication pattern over Kafka.
+
+Technology Stack:
+*   **Language:** Java
+*   **Framework:** Spring Boot with Spring Cloud Gateway or a similar robust API Gateway framework is recommended. Alternatively, use Spring WebFlux/MVC with manual Kafka integration.
+*   **Kafka Client:** Use Spring Kafka or the standard Apache Kafka Clients library for Java, ensuring support for request/reply patterns and header manipulation.
+*   **Build Tool:** Maven or Gradle.
+
+Core Responsibilities:
+*   Act as the single entry point for all HTTP(S) requests from clients. Define clear API routes (e.g., `/auth/*`, `/users/*`, `/messages/*`, `/representatives/*`).
+*   Implement Authentication: Validate JWT tokens (or other chosen mechanism) on incoming requests for protected endpoints. Reject unauthorized requests immediately with appropriate HTTP status codes (e.g., 401 Unauthorized).
+*   Request Routing and Transformation (HTTP -> Kafka):
+    *   For each incoming request destined for a backend service:
+        *   Translate the HTTP request (path parameters, query parameters, body) into a structured Kafka message payload (JSON recommended).
+        *   Determine the specific Kafka request topic based on the target service and action (e.g., `req.api-gateway.user-service.login`).
+        *   Determine the specific Kafka reply topic where the response is expected (e.g., `res.user-service.api-gateway.login`).
+        *   Generate a unique `correlationId` for the request.
+        *   Publish the message to the target request topic using Kafka, including headers: `correlationId`, `replyTopic` (the determined reply topic), `sourceService='api-gateway'`.
+*   Response Handling (Kafka -> HTTP):
+    *   Implement listener logic to subscribe to all relevant reply topics (using a pattern like `res.*.api-gateway.*` or subscribing to specific topics).
+    *   Use the `correlationId` from consumed reply messages to match them to the original pending HTTP request.
+    *   Translate the Kafka reply message payload back into the appropriate HTTP response (status code, body) for the client.
+*   Timeout Management:
+    *   Implement a robust mechanism to handle timeouts for requests awaiting replies via Kafka. If a reply doesn't arrive within a configured timeout period (e.g., 10-15 seconds), send an appropriate HTTP error response to the client (e.g., 504 Gateway Timeout).
+*   Cross-Cutting Concerns:
+    *   Implement basic request logging.
+    *   Implement basic rate limiting (e.g., using Spring Cloud Gateway filters or libraries like Resilience4j/Bucket4j).
+*   No Direct Service-to-Service Calls: The API Gateway communicates *only* via Kafka to the backend microservices (User, District, Representative, Message, etc.). It should not make direct HTTP calls to them.
+
+Kafka Interaction Details:
+*   Use the agreed topic naming conventions:
+    *   Requests: `req.api-gateway.{target-service}.{action}` (Publish)
+    *   Replies: `res.{responder}.api-gateway.{action}` (Subscribe)
+*   Manage Kafka Producers (`KafkaTemplate`) for sending requests.
+*   Manage Kafka Consumers (`@KafkaListener`) for receiving replies. Handle message deserialization and header extraction.
+*   Implement the correlation logic (e.g., using a concurrent map to store pending requests keyed by `correlationId`) to match replies to requests and handle timeouts.
+
+Configuration:
+*   Use Spring Boot's configuration mechanisms (`application.properties` or `application.yml`) for Kafka broker addresses, topic names/patterns, request timeouts, JWT validation keys, rate limiting parameters, etc.
+
+Initial Focus:
+*   Set up a basic Spring Boot project, potentially using Spring Cloud Gateway.
+*   Implement the health check endpoint (`/actuator/health`).
+*   Implement the routes and Kafka request/reply logic for the User Service endpoints first:
+    *   `POST /auth/register` -> `req.api-gateway.user-service.register` / `res.user-service.api-gateway.register`
+    *   `POST /auth/login` -> `req.api-gateway.user-service.login` / `res.user-service.api-gateway.login`
+*   Implement basic JWT validation logic (initially perhaps just checking for presence/format, later full validation).
+
+Ask the Architect (me) if any requirements regarding routing, Kafka interactions, or timeout handling are unclear.

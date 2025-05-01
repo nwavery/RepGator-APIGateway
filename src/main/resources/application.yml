@@ -1,0 +1,363 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # Global Default Filters (applied to all routes)
+      # --- Temporarily Commented Out Rate Limiter --- 
+      # default-filters:
+      #   # Apply rate limiting using Redis
+      #   - name: RequestRateLimiter
+      #     args:
+      #       # Use the IP address based key resolver bean we defined
+      #       key-resolver: "#{@remoteAddrKeyResolver}"
+      #       # Configure the underlying Redis Rate Limiter
+      #       redis-rate-limiter:
+      #         replenishRate: 10   # Tokens per second
+      #         burstCapacity: 20   # Max requests in a burst
+      #         # requestedTokens: 1 # Cost of each request (default is 1)
+      #       # Optional: Customize the status code returned when rate limited (default is 429 TOO_MANY_REQUESTS)
+      #       # statusCode: 429 
+      routes:
+        # --- Public Auth Routes ---
+        - id: register_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/auth/register
+            - Method=POST
+          filters:
+            # Only Kafka filter needed, no JWT check
+            - KafkaRequestReply=RegisterRoute,${app.kafka.topics.register-request},${app.kafka.topics.register-reply}
+            
+        - id: login_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/auth/login
+            - Method=POST
+          filters:
+            - KafkaRequestReply=LoginRoute,${app.kafka.topics.login-request},${app.kafka.topics.login-reply}
+
+        # --- Protected User Profile Routes ---
+        - id: user_get_profile_route 
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/user/profile
+            - Method=GET
+          filters:
+            # 1. JWT Auth (No ignored paths needed here specifically, default handled by global config if any)
+            - name: JwtAuthentication
+              # args: # No specific args needed if default ignored paths suffice
+            # 2. Kafka Request/Reply
+            - KafkaRequestReply=GetUserProfileRoute,${app.kafka.topics.user-get-profile-request},${app.kafka.topics.user-get-profile-reply}
+            
+        - id: user_update_profile_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/user/profile
+            - Method=PUT 
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply
+            - KafkaRequestReply=UpdateUserProfileRoute,${app.kafka.topics.user-update-profile-request},${app.kafka.topics.user-update-profile-reply}
+
+        # --- Protected Representative Routes (DEFERRED) ---
+        - id: rep_get_by_district_route
+          uri: no://op
+          predicates:
+            # Requires districtId query parameter
+            - Path=/representatives
+            - Method=GET
+            - Query=districtId
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply
+            # Filter automatically extracts query params
+            - KafkaRequestReply=GetRepsByDistrictRoute,${app.kafka.topics.rep-get-by-district-request},${app.kafka.topics.rep-get-by-district-reply}
+            
+        - id: rep_get_by_id_route
+          uri: no://op
+          predicates:
+            # Matches /representatives/{any_non_slash_segment}
+            - Path=/representatives/{repId}
+            - Method=GET
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply
+            # Filter automatically extracts path variables like {repId}
+            - KafkaRequestReply=GetRepByIdRoute,${app.kafka.topics.rep-get-by-id-request},${app.kafka.topics.rep-get-by-id-reply}
+
+        # --- Protected Messaging Routes ---
+        - id: msg_get_conversations_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/conversations
+            - Method=GET
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId from token)
+            - KafkaRequestReply=GetConversationsRoute,${app.kafka.topics.msg-get-conversations-request},${app.kafka.topics.msg-get-conversations-reply}
+            
+        - id: msg_get_conversation_messages_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            # Matches /conversations/{any_uuid_or_id}/messages
+            - Path=/conversations/{conversationId}/messages
+            - Method=GET
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId and conversationId)
+            - KafkaRequestReply=GetConversationMessagesRoute,${app.kafka.topics.msg-get-conversation-messages-request},${app.kafka.topics.msg-get-conversation-messages-reply}
+            
+        - id: msg_post_direct_message_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            # Assuming POST to /messages is for sending DMs based on arch2 text
+            - Path=/messages 
+            - Method=POST
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId and request body e.g., {recipientId, text})
+            - KafkaRequestReply=PostDirectMessageRoute,${app.kafka.topics.msg-post-direct-message-request},${app.kafka.topics.msg-post-direct-message-reply}
+
+        # --- Protected Dashboard Route ---
+        - id: dash_get_summary_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/dashboard/summary
+            - Method=GET
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId from token)
+            - KafkaRequestReply=GetDashboardSummaryRoute,${app.kafka.topics.dash-get-summary-request},${app.kafka.topics.dash-get-summary-reply}
+
+        # --- Protected Discussion Routes ---
+        - id: disc_get_district_messages_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            # Requires districtId query parameter
+            - Path=/discussions
+            - Method=GET
+            - Query=districtId
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId and districtId)
+            - KafkaRequestReply=GetDistrictMessagesRoute,${app.kafka.topics.disc-get-district-messages-request},${app.kafka.topics.disc-get-district-messages-reply}
+            
+        - id: disc_post_district_message_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/discussions
+            - Method=POST
+          filters:
+            # 1. JWT Auth
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (Payload includes userId and request body e.g., {districtId?, text})
+            - KafkaRequestReply=PostDistrictMessageRoute,${app.kafka.topics.disc-post-district-message-request},${app.kafka.topics.disc-post-district-message-reply}
+
+        # --- NEW Protected News Route ---
+        - id: news_get_politics_route
+          uri: no://op # Kafka filter handles destination
+          predicates:
+            - Path=/news/politics
+            - Method=GET
+          filters:
+            # 1. JWT Auth (Assuming news requires authentication)
+            - name: JwtAuthentication
+            # 2. Kafka Request/Reply (No specific payload needed for GET)
+            - KafkaRequestReply=GetPoliticsNewsRoute,${app.kafka.topics.news-get-politics-request},${app.kafka.topics.news-get-politics-reply}
+
+        # --- Protected Routes (DEFERRED - Using specific routes above for now) ---
+        # User Service Routes 
+        # - id: user_service_routes
+        #   uri: no://op # Kafka filter handles destination
+        #   predicates:
+        #     # Match any path starting with /users/
+        #     # Specific paths (e.g., /users/{id}) will match here.
+        #     # More specific routes could be defined *before* this one if needed.
+        #     - Path=/users/** 
+        #   filters:
+        #     # 1. Apply JWT Authentication Filter
+        #     # This filter runs for this route unless a path matches ignoredPaths.
+        #     - name: JwtAuthentication
+        #       args:
+        #         ignoredPaths: # Standard paths to ignore for *all* protected routes
+        #           - /auth/**     # Auth endpoints are public
+        #           - /actuator/** # Management endpoints often public or secured differently
+        #     # 2. Apply Kafka Request/Reply Filter
+        #     # IMPORTANT: This currently uses a single topic pair for ALL /users/** requests.
+        #     # A real implementation needs a way to determine the correct Kafka topic based on
+        #     # the specific path and method (e.g., GET /users/{id} -> user-get-request, POST /users -> user-create-request).
+        #     # This likely requires a more sophisticated routing filter or enhancements to KafkaRequestReply filter.
+        #     # Using placeholder 'user-get' topics for now.
+        #     - KafkaRequestReply=UsersRoute,${app.kafka.topics.user-get-request},${app.kafka.topics.user-get-reply}
+        # # Message Service Routes
+        # - id: message_service_routes
+        #   uri: no://op 
+        #   predicates:
+        #     - Path=/messages/**
+        #   filters:
+        #     # 1. JWT Auth
+        #     - name: JwtAuthentication
+        #       args:
+        #         ignoredPaths: 
+        #           - /auth/**
+        #           - /actuator/**
+        #     # 2. Kafka Request/Reply (using placeholder 'message-create' topics)
+        #     # Needs refinement based on actual path/method -> Kafka topic mapping.
+        #     - KafkaRequestReply=MessagesRoute,${app.kafka.topics.message-create-request},${app.kafka.topics.message-create-reply}
+        # # Representative Service Routes
+        # - id: representative_service_routes
+        #   uri: no://op
+        #   predicates:
+        #     - Path=/representatives/**
+        #   filters:
+        #     # 1. JWT Auth
+        #     - name: JwtAuthentication
+        #       args:
+        #         ignoredPaths: 
+        #           - /auth/**
+        #           - /actuator/**
+        #     # 2. Kafka Request/Reply (using placeholder 'representative-list' topics)
+        #     # Needs refinement based on actual path/method -> Kafka topic mapping.
+        #     - KafkaRequestReply=RepresentativesRoute,${app.kafka.topics.representative-list-request},${app.kafka.topics.representative-list-reply}
+  kafka:
+    # === Confluent Cloud Kafka Connection ===
+    # IMPORTANT: In a real-world scenario, avoid committing the API Secret directly
+    # into source control. Use environment variables, Spring Cloud Config Server,
+    # or a dedicated secrets management tool. For this development context,
+    # we are placing it here for simplicity.
+
+    # Kafka Broker Connection
+    bootstrap-servers: pkc-n3603.us-central1.gcp.confluent.cloud:9092
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: PLAIN
+      sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="6ZWG2CQ3CBDZA274" password="QoRkouE20fUnnrTcR3BSAEY5sPkEICvDuvv+tVhCrkHBpzDoAjO6AXg91R7G4bOc";
+      spring.json.trusted.packages: '*'
+      spring.json.use.type.headers: false
+      spring.json.value.default.type: java.lang.Object
+
+    producer:
+      properties:
+        acks: all
+      # Keep existing serializers from the old config
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    
+    admin:
+      properties:
+        # Ensure topics created via Spring Kafka Admin have the correct replication factor
+        replication.factor: 3
+        
+    consumer:
+      group-id: api-gateway-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+    # Keep existing listener/template config
+    listener:
+      concurrency: 3 
+    template:
+      default-topic: default-topic-not-used 
+    # === End Confluent Cloud Kafka Connection ===
+  data:
+    redis:
+      host: localhost # Replace if Redis is elsewhere
+      port: 6379      # Default Redis port
+      # password: your-redis-password # Uncomment and set if Redis requires auth
+      # database: 0 # Default Redis database
+      # Add other relevant properties like timeout, ssl if needed
+
+# Custom application properties namespace for clarity
+app:
+  kafka:
+    request-timeout-ms: 15000 # Request timeout (15 seconds) as suggested in arch.txt
+    topics:
+      # Auth (User Service)
+      login-request: req.api-gateway.user-service.login
+      login-reply: res.user-service.api-gateway.login # Arch2 doesn't specify reply, assuming convention
+      register-request: req.api-gateway.user-service.register
+      register-reply: res.user-service.api-gateway.register # Arch2 doesn't specify reply, assuming convention
+      # Representatives (Representative Service)
+      rep-get-by-district-request: req.api-gateway.representative-service.get-by-district
+      rep-get-by-district-reply: res.representative-service.api-gateway.get-by-district # Assumed
+      rep-get-by-id-request: req.api-gateway.representative-service.get-by-id
+      rep-get-by-id-reply: res.representative-service.api-gateway.get-by-id # Assumed
+      # Messages/Conversations (Message Service)
+      msg-get-conversations-request: req.api-gateway.message-service.get-user-conversations
+      msg-get-conversations-reply: res.message-service.api-gateway.get-user-conversations # Assumed
+      msg-get-conversation-messages-request: req.api-gateway.message-service.get-conversation-messages
+      msg-get-conversation-messages-reply: res.message-service.api-gateway.get-conversation-messages # Assumed
+      msg-post-direct-message-request: req.api-gateway.message-service.post-direct-message
+      msg-post-direct-message-reply: res.message-service.api-gateway.post-direct-message # Assumed
+      # Dashboard (User Service)
+      dash-get-summary-request: req.api-gateway.user-service.get-dashboard-summary
+      dash-get-summary-reply: res.user-service.api-gateway.get-dashboard-summary # Assumed
+      # User Profile (User Service)
+      user-get-profile-request: req.api-gateway.user-service.get-profile
+      user-get-profile-reply: res.user-service.api-gateway.get-profile # Assumed
+      user-update-profile-request: req.api-gateway.user-service.update-profile
+      user-update-profile-reply: res.user-service.api-gateway.update-profile # Assumed
+      # Discussions (Message Service)
+      disc-get-district-messages-request: req.api-gateway.message-service.get-district-messages
+      disc-get-district-messages-reply: res.message-service.api-gateway.get-district-messages # Assumed
+      disc-post-district-message-request: req.api-gateway.message-service.post-district-message
+      disc-post-district-message-reply: res.message-service.api-gateway.post-district-message # Assumed
+      # News (District Service) - NEW
+      news-get-politics-request: req.api-gateway.district-service.get-politics-news
+      news-get-politics-reply: res.district-service.api-gateway.get-politics-news
+      # General Reply Pattern (still needed for listener)
+      reply-pattern: res.*.api-gateway.*
+  jwt:
+    # IMPORTANT: Replace with a strong, base64-encoded secret key. 
+    # Minimum recommended length for HS256 is 32 bytes (256 bits).
+    # Generate using: openssl rand -base64 32 
+    # Load from environment variable or secrets manager in production!
+    secret-key: "YourSuperSecretKeyThatIsVeryLongAndSecureAndDefinitelyNotInGit"
+    # Token validity duration (e.g., 1 hour = 3600000 ms)
+    # This might be more relevant for token *issuance*, which the gateway might not do.
+    # For validation, we just check the expiration claim in the token itself.
+    # We might need the expiration time if the gateway *issues* tokens.
+    # Let's keep it commented out for now as the gateway only validates.
+    # expiration-ms: 3600000 
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose only the 'health' endpoint via HTTP initially
+        include: health 
+  endpoint:
+    health:
+      # Show detailed health information
+      show-details: always 
+kafka:
+  reply:
+    topic: api-gateway-replies
+
+# Logging Configuration
+logging:
+  level:
+    # Set filter back to DEBUG to see response body log
+    APIGateway.demo.filter.KafkaRequestReplyGatewayFilterFactory: DEBUG 
+    APIGateway.demo.kafka.ReplyCorrelationService: INFO 
+    # Keep listener infrastructure at INFO
+    org.springframework.kafka.listener: INFO 
+    org.springframework.kafka.support.serializer: INFO
+    org.springframework.kafka.listener.DefaultErrorHandler: INFO
+    org.springframework.kafka.listener.SeekToCurrentErrorHandler: INFO
+    # Keep others at INFO
+    org.springframework: INFO
+    APIGateway.demo: INFO
+    root: INFO
