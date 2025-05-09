@@ -127,9 +127,6 @@ public class KafkaRequestReplyGatewayFilterFactory
                         boolean completed = replyFuture.completeExceptionally( 
                             new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to send request to backend service.", ex)
                         ); 
-                        if (!completed) {
-                            replyCorrelationService.completeRequest(correlationId, null);
-                        }
                     } else {
                         log.debug("[CorrId: {}] Kafka request sent successfully to topic {}. Offset: {}", correlationId, requestTopic, result.getRecordMetadata().offset());
                     }

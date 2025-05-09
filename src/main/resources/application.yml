@@ -264,10 +264,14 @@ spring:
       group-id: api-gateway-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Disable auto commit for manual acknowledgment
+      enable.auto.commit: false
 
     # Keep existing listener/template config
     listener:
-      concurrency: 3 
+      # Set AckMode to MANUAL_IMMEDIATE for manual commits
+      ack-mode: MANUAL_IMMEDIATE 
+      concurrency: 3
     template:
       default-topic: default-topic-not-used 
     # === End Confluent Cloud Kafka Connection ===

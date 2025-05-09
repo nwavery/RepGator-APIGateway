@@ -12,6 +12,8 @@ import org.springframework.kafka.listener.CommonLoggingErrorHandler;
 import APIGateway.demo.kafka.ReplyListener; // Import ReplyListener
 import org.springframework.kafka.listener.MessageListener; // Import MessageListener
 import org.springframework.kafka.support.KafkaHeaders; // Import KafkaHeaders
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.AcknowledgingMessageListener;
 
 // import java.util.HashMap;
 // import java.util.Map;
@@ -122,15 +124,17 @@ public class KafkaConfig {
         // Create the container for the specific topic using the factory
         ConcurrentMessageListenerContainer<String, Object> container = factory.createContainer(newsReplyTopic);
         container.getContainerProperties().setGroupId(consumerGroupId);
+        // Ensure AckMode is set correctly for this container too (might be inherited, but explicit is safer)
+        container.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         
-        // Manually set the MessageListener
-        container.setupMessageListener((MessageListener<String, Object>) record -> {
+        // Manually set the MessageListener - now accepting Acknowledgment
+        container.setupMessageListener((AcknowledgingMessageListener<String, Object>) (record, acknowledgment) -> {
             // Extract correlation ID header (assuming it's byte[])
             byte[] correlationIdBytes = record.headers().lastHeader(KafkaHeaders.CORRELATION_ID) != null ?
                                         record.headers().lastHeader(KafkaHeaders.CORRELATION_ID).value() : null;
             
-            // Call the public handler method in ReplyListener
-            replyListener.handlePublicReply(record, correlationIdBytes);
+            // Call the public handler method in ReplyListener, passing acknowledgment
+            replyListener.handlePublicReply(record, correlationIdBytes, acknowledgment);
 
         });
         
