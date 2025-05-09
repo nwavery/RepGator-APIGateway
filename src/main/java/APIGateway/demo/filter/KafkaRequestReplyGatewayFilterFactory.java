@@ -123,10 +123,7 @@ public class KafkaRequestReplyGatewayFilterFactory
                 
                 kafkaTemplate.send(producerRecord).whenComplete((result, ex) -> {
                     if (ex != null) {
-                        log.error("!!! [CorrId: {}] Failed to send Kafka request for route {}: {}", correlationId, routeName, ex.getMessage(), ex);
-                        boolean completed = replyFuture.completeExceptionally( 
-                            new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to send request to backend service.", ex)
-                        ); 
+                        log.error("!!! [CorrId: {}] Failed to send Kafka request for route {}: {}", correlationId, routeName, ex.getMessage(), ex); 
                     } else {
                         log.debug("[CorrId: {}] Kafka request sent successfully to topic {}. Offset: {}", correlationId, requestTopic, result.getRecordMetadata().offset());
                     }

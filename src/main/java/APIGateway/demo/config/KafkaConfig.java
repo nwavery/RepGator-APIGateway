@@ -10,7 +10,6 @@ import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.CommonLoggingErrorHandler;
 import APIGateway.demo.kafka.ReplyListener; // Import ReplyListener
-import org.springframework.kafka.listener.MessageListener; // Import MessageListener
 import org.springframework.kafka.support.KafkaHeaders; // Import KafkaHeaders
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.AcknowledgingMessageListener;
