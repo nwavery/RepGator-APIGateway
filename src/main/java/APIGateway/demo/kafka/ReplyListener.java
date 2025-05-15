@@ -124,17 +124,17 @@ public class ReplyListener {
 
     // --- Listener for News Service Replies ---
 
-    // @KafkaListener(topics = "${app.kafka.topics.news-get-politics-reply}", groupId = CONSUMER_GROUP_ID) // Using hardcoded topic below
-    @KafkaListener(topics = "res.district-service.api-gateway.get-politics-news", groupId = CONSUMER_GROUP_ID)
-    // Restoring original signature that works for other listeners
-    public void listenGetPoliticsNewsReply(ConsumerRecord<String, Object> record,
-                                         @Header(KafkaHeaders.CORRELATION_ID) byte[] correlationIdBytes) {
-        // log.warn("%%% MINIMAL LISTENER INVOKED ... "); // Removed diagnostic log
-        // Call original handler
-        handleReply(record, correlationIdBytes, null);
-    }
+    // The @KafkaListener for this topic has been removed because this listener
+    // is now configured programmatically in KafkaConfig.java to resolve
+    // a previous method invocation issue.
+    // @KafkaListener(topics = "res.district-service.api-gateway.get-politics-news", groupId = CONSUMER_GROUP_ID)
+    // public void listenGetPoliticsNewsReply(ConsumerRecord<String, Object> record, 
+    //                                      @Header(KafkaHeaders.CORRELATION_ID) byte[] correlationIdBytes,
+    //                                      Acknowledgment acknowledgment) {
+    //     handleReply(record, correlationIdBytes, acknowledgment);
+    // }
 
-    // Centralized handling logic (original - accepts byte[])
+    // Centralized handling logic - now accepts Acknowledgment
     private void handleReply(ConsumerRecord<String, Object> record, byte[] correlationIdBytes, Acknowledgment acknowledgment) {
         if (correlationIdBytes == null) {
             log.error("Received reply message with no correlation ID header (byte[]) on topic {}: {}", record.topic(), record.value());
@@ -155,12 +155,5 @@ public class ReplyListener {
         // Simply call the existing private handler logic, passing acknowledgment
         handleReply(record, correlationIdBytes, acknowledgment);
     }
-    
-    // Overload or new method to handle String correlation ID (No longer needed/used)
-    /*
-    private void handleReplyFromStringHeader(ConsumerRecord<String, Object> record, String correlationId) {
-        // ... implementation removed ...
-    }
-    */
     
 } 

@@ -321,8 +321,8 @@ app:
       # News (District Service) - NEW
       news-get-politics-request: req.api-gateway.district-service.get-politics-news
       news-get-politics-reply: res.district-service.api-gateway.get-politics-news
-      # General Reply Pattern (still needed for listener)
-      reply-pattern: res.*.api-gateway.*
+      # General Reply Pattern (still needed for listener) -> NO LONGER USED (all listeners are explicit)
+      # reply-pattern: res.*.api-gateway.*
   jwt:
     # IMPORTANT: Replace with a strong, base64-encoded secret key. 
     # Minimum recommended length for HS256 is 32 bytes (256 bits).

@@ -13,12 +13,18 @@ import APIGateway.demo.kafka.ReplyListener; // Import ReplyListener
 import org.springframework.kafka.support.KafkaHeaders; // Import KafkaHeaders
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.AcknowledgingMessageListener;
+import org.springframework.core.env.Environment;
+import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // import java.util.HashMap;
 // import java.util.Map;
 
 @Configuration
 public class KafkaConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(KafkaConfig.class); // Added logger
 
     // Inject the ReplyListener bean containing the handler logic
     @Autowired
@@ -29,6 +35,9 @@ public class KafkaConfig {
 
     @Value("${app.kafka.topics.news-get-politics-reply}") // Get topic name from properties
     private String newsReplyTopic;
+
+    // @Autowired
+    // private Environment env; // Commented out as env is no longer used
 
     // --- REMOVING Explicit Bean Definitions for auto-configured components ---
     /*
@@ -131,6 +140,15 @@ public class KafkaConfig {
             // Extract correlation ID header (assuming it's byte[])
             byte[] correlationIdBytes = record.headers().lastHeader(KafkaHeaders.CORRELATION_ID) != null ?
                                         record.headers().lastHeader(KafkaHeaders.CORRELATION_ID).value() : null;
+            
+            if (correlationIdBytes == null) {
+                log.error("Programmatic Listener: Received reply with no correlation ID on topic {}. Record: {}", record.topic(), record.value()); 
+                // Not acknowledging here, as we cannot process without correlation ID.
+                // The message might be redelivered if not acknowledged, or error handler might deal with it.
+                return; 
+            }
+            String correlationId = new String(correlationIdBytes, StandardCharsets.UTF_8);
+            log.debug("%%% Programmatic Listener received reply on topic {} for correlationId: {}", record.topic(), correlationId);
             
             // Call the public handler method in ReplyListener, passing acknowledgment
             replyListener.handlePublicReply(record, correlationIdBytes, acknowledgment);
