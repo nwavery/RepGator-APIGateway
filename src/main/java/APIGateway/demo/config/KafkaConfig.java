@@ -13,7 +13,6 @@ import APIGateway.demo.kafka.ReplyListener; // Import ReplyListener
 import org.springframework.kafka.support.KafkaHeaders; // Import KafkaHeaders
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.AcknowledgingMessageListener;
-import org.springframework.core.env.Environment;
 import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
